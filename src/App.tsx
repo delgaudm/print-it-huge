@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
-import { Upload, FileImage, Download, Sun, Moon, ZoomIn, ZoomOut, RotateCcw, Layers, Grid3x3, Palette, ChevronDown, Target } from 'lucide-react';
+import { FileImage, Download, Sun, Moon, ZoomIn, ZoomOut, RotateCcw, Target } from 'lucide-react';
 import { StyleTipBox, Confetti, PrivacyTapeBadge } from './components';
 
 const paperDims = {
@@ -18,6 +18,14 @@ function convertToGrayscale(imageData: ImageData): ImageData {
   }
   return imageData;
 }
+
+// Rendering cost grows with the page grid, so dimensions are clamped in JS
+// (the HTML min/max attributes alone do not stop typed input)
+const MAX_PAGES_PER_SIDE = 100;
+
+const clampPages = (value: string) => Math.min(MAX_PAGES_PER_SIDE, Math.max(1, parseInt(value) || 1));
+
+const clampDotSize = (value: string) => Math.min(50, Math.max(2, parseFloat(value) || 2));
 
 export default function App() {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -169,11 +177,21 @@ export default function App() {
     setPan({ x: 0, y: 0 });
   };
 
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(prev => Math.max(0.25, Math.min(10, prev * delta)));
-  };
+  // React attaches onWheel as a passive listener, where preventDefault() is a
+  // no-op, so the wheel listener is attached natively with passive: false.
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom(prev => Math.max(0.25, Math.min(10, prev * delta)));
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
 
   const handlePanStart = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button === 0 && zoom > 1) {
@@ -247,12 +265,19 @@ export default function App() {
     return { width, height };
   };
 
-  // Calculate optimal pages from wall dimensions
-  const calculatePagesFromWall = (wallWidth: number, wallHeight: number) => {
-    let pWidth = paperDims[paperSize].width;
-    let pHeight = paperDims[paperSize].height;
+  // Calculate optimal pages from wall dimensions. Paper and orientation can be
+  // passed explicitly when recalculating in response to a change that React
+  // state has not applied yet.
+  const calculatePagesFromWall = (
+    wallWidth: number,
+    wallHeight: number,
+    forPaper: 'letter' | 'a4' = paperSize,
+    forOrientation: 'portrait' | 'landscape' = orientation
+  ) => {
+    let pWidth = paperDims[forPaper].width;
+    let pHeight = paperDims[forPaper].height;
 
-    if (orientation === 'landscape') {
+    if (forOrientation === 'landscape') {
       [pWidth, pHeight] = [pHeight, pWidth];
     }
 
@@ -270,8 +295,8 @@ export default function App() {
     const calculatedPagesHigh = Math.floor(wallHeightMm / pHeight);
 
     return {
-      pagesWide: Math.max(1, calculatedPagesWide),
-      pagesHigh: Math.max(1, calculatedPagesHigh)
+      pagesWide: Math.min(100, Math.max(1, calculatedPagesWide)),
+      pagesHigh: Math.min(100, Math.max(1, calculatedPagesHigh))
     };
   };
 
@@ -353,12 +378,6 @@ export default function App() {
     const scale = maxWidth / math.totalWidthMm;
     canvas.width = maxWidth;
     canvas.height = math.totalHeightMm * scale;
-
-    const offscreen = document.createElement('canvas');
-    offscreen.width = math.cols;
-    offscreen.height = math.rows;
-    const oCtx = offscreen.getContext('2d', { willReadFrequently: true });
-    if (!oCtx) return;
 
     // Draw image with padding if preserving aspect ratio
     const imgCanvas = document.createElement('canvas');
@@ -549,10 +568,9 @@ export default function App() {
                   ctx.closePath();
                   ctx.fill();
                 } else if (style === 'stippling') {
-                  // Deterministic random based on position
+                  // Deterministic random based on position; offsets are scaled by
+                  // a full dotSize to match the PDF renderer
                   const seed = (gridX * 73856093 + gridY * 19349663) % 2147483647;
-                  const rand1 = ((seed * 16807) % 2147483647) / 2147483647;
-                  const rand2 = ((seed * 48271) % 2147483647) / 2147483647;
 
                   const numDots = Math.floor(darkness * 3) + 1;
                   for (let d = 0; d < numDots; d++) {
@@ -561,7 +579,7 @@ export default function App() {
                     const dy = ((dotSeed * 12345) % 2147483647) / 2147483647 - 0.5;
                     const stippleRadius = (previewDotMaxRadius * darkness) * (0.5 + ((dotSeed * 6907) % 2147483647) / 2147483647 * 0.5);
                     ctx.beginPath();
-                    ctx.arc(dx * previewDotMaxRadius, dy * previewDotMaxRadius, stippleRadius, 0, Math.PI * 2);
+                    ctx.arc(dx * math.dotSize * scale, dy * math.dotSize * scale, stippleRadius, 0, Math.PI * 2);
                     ctx.fill();
                   }
                 } else if (style === 'pixels') {
@@ -599,7 +617,7 @@ export default function App() {
         ctx.beginPath(); ctx.moveTo(0, lineY); ctx.lineTo(canvas.width, lineY); ctx.stroke();
       }
     }
-  }, [image, paperSize, orientation, pagesWide, pagesHigh, dotSize, dotColor, style, gridAngle, colorMode]);
+  }, [image, paperSize, orientation, pagesWide, pagesHigh, dotSize, dotColor, style, gridAngle, colorMode, preserveAspectRatio]);
 
   const generatePDF = () => {
     if (!image) return;
@@ -1016,7 +1034,22 @@ export default function App() {
                   <select
                     className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
                     value={paperSize}
-                    onChange={(e) => setPaperSize(e.target.value as 'letter' | 'a4')}
+                    onChange={(e) => {
+                      const newSize = e.target.value as 'letter' | 'a4';
+                      setPaperSize(newSize);
+
+                      // Keep the page grid in sync with the wall dimensions when
+                      // the paper format changes in Wall Space mode
+                      if (layoutMode === 'wallSpace') {
+                        const wallW = parseFloat(wallWidth) || 0;
+                        const wallH = parseFloat(wallHeight) || 0;
+                        if (wallW > 0 && wallH > 0) {
+                          const pages = calculatePagesFromWall(wallW, wallH, newSize);
+                          setPagesWide(pages.pagesWide);
+                          setPagesHigh(pages.pagesHigh);
+                        }
+                      }
+                    }}
                   >
                     <option value="letter">US Letter (8.5" x 11")</option>
                     <option value="a4">A4 (210mm x 297mm)</option>
@@ -1029,7 +1062,22 @@ export default function App() {
                   <select
                     className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
                     value={orientation}
-                    onChange={(e) => setOrientation(e.target.value as 'portrait' | 'landscape')}
+                    onChange={(e) => {
+                      const newOrientation = e.target.value as 'portrait' | 'landscape';
+                      setOrientation(newOrientation);
+
+                      // Keep the page grid in sync with the wall dimensions when
+                      // the orientation changes in Wall Space mode
+                      if (layoutMode === 'wallSpace') {
+                        const wallW = parseFloat(wallWidth) || 0;
+                        const wallH = parseFloat(wallHeight) || 0;
+                        if (wallW > 0 && wallH > 0) {
+                          const pages = calculatePagesFromWall(wallW, wallH, paperSize, newOrientation);
+                          setPagesWide(pages.pagesWide);
+                          setPagesHigh(pages.pagesHigh);
+                        }
+                      }
+                    }}
                   >
                     <option value="portrait">Portrait</option>
                     <option value="landscape">Landscape</option>
@@ -1109,10 +1157,10 @@ export default function App() {
                       <input
                         type="number"
                         min="1"
-                        max="1000"
+                        max={MAX_PAGES_PER_SIDE}
                         className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
                         value={pagesWide}
-                        onChange={(e) => setPagesWide(parseInt(e.target.value) || 1)}
+                        onChange={(e) => setPagesWide(clampPages(e.target.value))}
                       />
                     </div>
                     <div>
@@ -1120,10 +1168,10 @@ export default function App() {
                       <input
                         type="number"
                         min="1"
-                        max="1000"
+                        max={MAX_PAGES_PER_SIDE}
                         className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
                         value={pagesHigh}
-                        onChange={(e) => setPagesHigh(parseInt(e.target.value) || 1)}
+                        onChange={(e) => setPagesHigh(clampPages(e.target.value))}
                       />
                     </div>
                   </div>
@@ -1283,7 +1331,7 @@ export default function App() {
                     min="2" max="50"
                     className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
                     value={dotSize}
-                    onChange={(e) => setDotSize(parseFloat(e.target.value) || 2)}
+                    onChange={(e) => setDotSize(clampDotSize(e.target.value))}
                   />
                 </div>
 
@@ -1417,7 +1465,6 @@ export default function App() {
               <div
                 ref={previewContainerRef}
                 className={`flex-1 border-3 border-[#1a1a1a] flex items-center justify-center p-1.5 overflow-hidden min-h-[300px] ${image ? 'cursor-grab active:cursor-grabbing' : ''} ${darkMode ? 'bg-[#0f0f0f]' : 'bg-[#f5f0e6]'}`}
-                onWheel={handleWheel}
                 onMouseDown={handlePanStart}
                 onMouseMove={handlePanMove}
                 onMouseUp={handlePanEnd}
