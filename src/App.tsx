@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import { FileImage, Download, Sun, Moon, ZoomIn, ZoomOut, RotateCcw, Target } from 'lucide-react';
-import { StyleTipBox, Confetti, PrivacyTapeBadge } from './components';
+import { StyleTipBox, Stamp, PrivacyTapeBadge } from './components';
 
 const paperDims = {
   letter: { width: 215.9, height: 279.4 },
@@ -623,9 +623,9 @@ export default function App() {
     if (!image) return;
 
     setIsGenerating(true);
-    setStatus('Turning dots into pages...');
-    setTimeout(() => setStatus('Almost there...'), 1000);
-    setTimeout(() => setStatus('This is going to look great!'), 2000);
+    setStatus('Ruling up pages...');
+    const statusTimer1 = setTimeout(() => setStatus('Laying out the dots...'), 1000);
+    const statusTimer2 = setTimeout(() => setStatus('Lining up the tiles...'), 2000);
 
     setTimeout(() => {
       try {
@@ -941,7 +941,9 @@ export default function App() {
         }
 
         doc.save('PrintItHuge_Poster.pdf');
-        setStatus('PDF downloaded successfully!');
+        clearTimeout(statusTimer1);
+        clearTimeout(statusTimer2);
+        setStatus('Downloaded! Your photo never left your computer.');
         setGenerationComplete(true);
       } catch (error) {
         console.error(error);
@@ -953,7 +955,7 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-[#0f0f0f]' : 'bg-[#f5f0e6]'}`}>
+    <div className={`min-h-screen transition-colors duration-300 ${darkMode ? 'bg-[#191512]' : 'bg-paper'}`}>
       {/* Paper texture overlay */}
       <div className="fixed inset-0 paper-texture pointer-events-none z-50" />
       <div className="fixed inset-0 halftone-overlay pointer-events-none z-50" />
@@ -964,19 +966,17 @@ export default function App() {
           {/* Header */}
           <header className="animate-slide-up">
             <div className="relative">
-              <div className="absolute -top-1 -left-1 w-3 h-3 bg-[#ff6b35] rounded-sm" style={{ transform: 'rotate(45deg)' }} />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#ff6eb4] rounded-sm" style={{ transform: 'rotate(-45deg)' }} />
-              <div className="bg-white border-3 border-[#1a1a1a] p-2 shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] relative">
-                <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-[#1a1a1a]" style={{ fontFamily: 'var(--font-display)' }}>
-                  PRINT IT HUGE
+              <div className="bg-sheet border border-line rounded-2xl p-4 shadow-sheet relative">
+                <h1 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-ink" style={{ fontFamily: 'var(--font-display)' }}>
+                  Print It Huge
                 </h1>
-                <div className="mt-0.5 flex items-center gap-1">
-                  <div className="h-0.5 flex-1 bg-[#ff6b35]" />
-                  <div className="h-0.5 flex-1 bg-[#ff6eb4]" />
-                  <div className="h-0.5 flex-1 bg-[#6b9bd2]" />
+                <div className="mt-2 flex items-center gap-1">
+                  <div className="h-0.5 flex-1 rounded-full bg-accent" />
+                  <div className="h-0.5 flex-1 rounded-full bg-blush" />
+                  <div className="h-0.5 flex-1 rounded-full bg-sky" />
                 </div>
-                <p className="mt-1.5 text-xs text-[#1a1a1a] opacity-80 font-medium">
-                  Turn pictures into giant wall posters
+                <p className="mt-1.5 text-sm text-ink-soft">
+                  Turn any image into a wall-size poster — on the printer you already own.
                 </p>
               </div>
             </div>
@@ -985,22 +985,22 @@ export default function App() {
           {/* Controls Panel */}
           <div className="w-full space-y-2 animate-slide-up stagger-1">
             {/* Unified Layout Section */}
-            <div className={`${darkMode ? 'bg-[#1a1a1a]' : 'bg-white'} border-3 border-[#1a1a1a] shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] p-2.5 animate-slide-up stagger-1 transition-all duration-300 ${hasUploaded ? 'opacity-100' : 'opacity-30'}`}>
+            <div className={`${darkMode ? 'bg-[#211c17]' : 'bg-sheet'} border border-line rounded-2xl shadow-sheet p-4 animate-slide-up stagger-1 transition-all duration-300 ${hasUploaded ? 'opacity-100' : 'opacity-30'}`}>
               <div className="flex items-center gap-1.5 mb-1.5">
-                <div className={`w-5 h-5 border-2 border-[#1a1a1a] flex items-center justify-center font-bold text-xs transition-all duration-300 ${hasUploaded ? 'bg-[#ff6b35] text-white' : 'bg-white text-[#999]'}`}>1</div>
-                <h3 className={`text-base font-bold transition-all duration-300 ${hasUploaded ? darkMode ? 'text-[#faf8f3]' : 'text-[#1a1a1a]' : darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/40'}`} style={{ fontFamily: 'var(--font-display)' }}>
-                  {hasUploaded ? 'HOW BIG DO YOU WANT IT?' : 'LAYOUT'}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs font-semibold transition-all duration-300 shrink-0 ${hasUploaded ? 'bg-accent text-white' : darkMode ? 'bg-[#2a241e] text-[#a1988c]' : 'bg-paper text-ink-soft'}`}>1</div>
+                <h3 className={`text-lg font-bold tracking-tight transition-all duration-300 ${hasUploaded ? darkMode ? 'text-[#f0e9dd]' : 'text-ink' : darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`} style={{ fontFamily: 'var(--font-display)' }}>
+                  {hasUploaded ? 'How big should it go?' : 'Layout'}
                 </h3>
               </div>
 
               <div className="space-y-2">
                 {/* Mode Toggle */}
                 <div>
-                  <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>
+                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                     Calculate by:
                   </label>
                   <select
-                    className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                    className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={layoutMode}
                     onChange={(e) => {
                       const newMode = e.target.value as 'pages' | 'wallSpace';
@@ -1030,9 +1030,9 @@ export default function App() {
 
                 {/* Paper Format */}
                 <div>
-                  <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Paper Format</label>
+                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Paper Format</label>
                   <select
-                    className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                    className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={paperSize}
                     onChange={(e) => {
                       const newSize = e.target.value as 'letter' | 'a4';
@@ -1058,9 +1058,9 @@ export default function App() {
 
                 {/* Orientation */}
                 <div>
-                  <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Orientation</label>
+                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Orientation</label>
                   <select
-                    className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                    className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={orientation}
                     onChange={(e) => {
                       const newOrientation = e.target.value as 'portrait' | 'landscape';
@@ -1089,9 +1089,9 @@ export default function App() {
                   // Wall Space Inputs
                   <>
                     <div>
-                      <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Measurement Unit</label>
+                      <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Measurement Unit</label>
                       <select
-                        className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                        className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                         value={wallUnit}
                         onChange={(e) => setWallUnit(e.target.value as 'imperial' | 'metric')}
                       >
@@ -1102,14 +1102,14 @@ export default function App() {
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>
+                        <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                           Width ({wallUnit === 'imperial' ? 'ft' : 'mm'})
                         </label>
                         <input
                           type="number"
                           min="0.1" step="0.1"
                           placeholder={wallUnit === 'imperial' ? '4' : '1200'}
-                          className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                          className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                           value={wallWidth}
                           onChange={(e) => {
                             setWallWidth(e.target.value);
@@ -1125,14 +1125,14 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>
+                        <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                           Height ({wallUnit === 'imperial' ? 'ft' : 'mm'})
                         </label>
                         <input
                           type="number"
                           min="0.1" step="0.1"
                           placeholder={wallUnit === 'imperial' ? '7' : '2100'}
-                          className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                          className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                           value={wallHeight}
                           onChange={(e) => {
                             setWallHeight(e.target.value);
@@ -1153,23 +1153,23 @@ export default function App() {
                   // Pages Inputs
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Pages Wide</label>
+                      <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pages Wide</label>
                       <input
                         type="number"
                         min="1"
                         max={MAX_PAGES_PER_SIDE}
-                        className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                        className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                         value={pagesWide}
                         onChange={(e) => setPagesWide(clampPages(e.target.value))}
                       />
                     </div>
                     <div>
-                      <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Pages High</label>
+                      <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pages High</label>
                       <input
                         type="number"
                         min="1"
                         max={MAX_PAGES_PER_SIDE}
-                        className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                        className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                         value={pagesHigh}
                         onChange={(e) => setPagesHigh(clampPages(e.target.value))}
                       />
@@ -1178,7 +1178,7 @@ export default function App() {
                 )}
 
                 {/* Info Box - Shows conversion results */}
-                <div className={`p-1.5 border-2 border-[#1a1a1a] ${darkMode ? 'bg-[#1a1a1a]/50' : 'bg-[#f5f0e6]/50'}`}>
+                <div className={`rounded-xl border p-3 ${darkMode ? 'border-[#3a332b] bg-white/5' : 'border-line bg-paper/70'}`}>
                   {(() => {
                     // Calculate total pages and check if too many
                     let totalPages = 0;
@@ -1196,8 +1196,8 @@ export default function App() {
                       <>
                         {/* Warning for large page counts */}
                         {isTooMany && (
-                          <p className="text-[10px] font-bold mb-1 text-[#e63946]">
-                            ⚠️ This will create 1000+ pages
+                          <p className="text-xs font-semibold mb-1 text-[#c0452f]">
+                            Heads up: this will create 1000+ pages
                           </p>
                         )}
 
@@ -1210,15 +1210,15 @@ export default function App() {
 
                             return (
                               <div className="grid grid-cols-2 gap-1">
-                                <div className={`text-center p-1 border border-[#1a1a1a] ${darkMode ? 'bg-[#1a1a1a]' : 'bg-white'}`}>
-                                  <div className={`text-[10px] ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/60'}`}>Wide</div>
-                                  <div className={`text-lg font-bold ${darkMode ? 'text-[#ff6b35]' : 'text-[#1a1a1a]'}`}>
+                                <div className={`rounded-lg p-1.5 text-center border ${darkMode ? 'border-[#3a332b] bg-white/5' : 'border-line bg-sheet'}`}>
+                                  <div className={`text-[11px] font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Wide</div>
+                                  <div className={`text-xl font-bold ${darkMode ? 'text-accent' : 'text-ink'}`}>
                                     {pages.pagesWide}
                                   </div>
                                 </div>
-                                <div className={`text-center p-1 border border-[#1a1a1a] ${darkMode ? 'bg-[#1a1a1a]' : 'bg-white'}`}>
-                                  <div className={`text-[10px] ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/60'}`}>High</div>
-                                  <div className={`text-lg font-bold ${darkMode ? 'text-[#ff6b35]' : 'text-[#1a1a1a]'}`}>
+                                <div className={`rounded-lg p-1.5 text-center border ${darkMode ? 'border-[#3a332b] bg-white/5' : 'border-line bg-sheet'}`}>
+                                  <div className={`text-[11px] font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>High</div>
+                                  <div className={`text-xl font-bold ${darkMode ? 'text-accent' : 'text-ink'}`}>
                                     {pages.pagesHigh}
                                   </div>
                                 </div>
@@ -1235,8 +1235,8 @@ export default function App() {
 
                             return (
                               <div className="text-center">
-                                <div className={`text-[10px] ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/60'}`}>Wall Size</div>
-                                <div className={`text-sm font-bold ${darkMode ? 'text-[#ff6b35]' : 'text-[#1a1a1a]'}`}>
+                                <div className={`text-[11px] font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Wall size</div>
+                                <div className={`text-sm font-bold ${darkMode ? 'text-accent' : 'text-ink'}`}>
                                   {formattedWidth} × {formattedHeight} {unitLabel}
                                 </div>
                               </div>
@@ -1248,8 +1248,8 @@ export default function App() {
                   })()}
                 </div>
 
-                {/* Preserve Aspect Ratio */}
-                <div className={`p-1.5 border-2 border-[#1a1a1a] ${darkMode ? 'bg-[#1a1a1a]/50' : 'bg-[#f5f0e6]/50'}`}>
+                {/* Preserve aspect ratio */}
+                <div className={`rounded-xl border p-3 ${darkMode ? 'border-[#3a332b] bg-white/5' : 'border-line bg-paper/70'}`}>
                   <label className="flex items-center gap-2 cursor-pointer mb-1">
                     <div className="relative">
                       <input
@@ -1258,18 +1258,18 @@ export default function App() {
                         checked={preserveAspectRatio}
                         onChange={(e) => setPreserveAspectRatio(e.target.checked)}
                       />
-                      <div className={`w-4 h-4 border-2 border-[#1a1a1a] bg-white peer-checked:bg-[#6b9bd2] transition-colors flex items-center justify-center`}>
+                      <div className={`w-4 h-4 rounded border border-line-strong bg-white peer-checked:bg-sky peer-checked:border-sky transition-colors flex items-center justify-center`}>
                         {preserveAspectRatio && <span className="text-white text-[10px] font-bold">✓</span>}
                       </div>
                     </div>
-                    <span className={`text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Preserve Aspect Ratio</span>
+                    <span className={`text-xs font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Preserve aspect ratio</span>
                   </label>
                   {image && preserveAspectRatio && (
                     <button
                       onClick={fitToAspectRatio}
-                      className="w-full py-1 px-2 text-xs font-bold bg-[#6b9bd2] hover:bg-[#6b9bd2]/90 text-white border-2 border-[#1a1a1a] shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] hover:translate-x-[1px] hover:translate-y-[1px] transition-all"
+                      className="w-full py-1.5 px-2 text-xs font-semibold bg-sky hover:bg-sky/90 text-white rounded-lg shadow-sm hover:shadow transition-all"
                     >
-                      FIT TO ASPECT RATIO
+                      Fit to image
                     </button>
                   )}
                 </div>
@@ -1277,19 +1277,19 @@ export default function App() {
             </div>
 
             {/* Style Section */}
-            <div className={`${darkMode ? 'bg-[#1a1a1a]' : 'bg-white'} border-3 border-[#1a1a1a] shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] p-2.5 animate-slide-up stagger-3 transition-all duration-300 ${hasUploaded ? 'opacity-100' : 'opacity-30'}`}>
+            <div className={`${darkMode ? 'bg-[#211c17]' : 'bg-sheet'} border border-line rounded-2xl shadow-sheet p-4 animate-slide-up stagger-3 transition-all duration-300 ${hasUploaded ? 'opacity-100' : 'opacity-30'}`}>
               <div className="flex items-center gap-1.5 mb-1.5">
-                <div className={`w-5 h-5 border-2 border-[#1a1a1a] flex items-center justify-center font-bold text-xs transition-all duration-300 ${hasUploaded ? 'bg-[#ff6eb4] text-white' : 'bg-white text-[#999]'}`}>2</div>
-                <h3 className={`text-base font-bold transition-all duration-300 ${hasUploaded ? darkMode ? 'text-[#faf8f3]' : 'text-[#1a1a1a]' : darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/40'}`} style={{ fontFamily: 'var(--font-display)' }}>
-                  {hasUploaded ? 'PICK A STYLE!' : 'STYLE'}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs font-semibold transition-all duration-300 ${hasUploaded ? 'bg-blush text-white' : darkMode ? 'bg-[#2a241e] text-[#a1988c]' : 'bg-paper text-ink-soft'}`}>2</div>
+                <h3 className={`text-lg font-bold tracking-tight transition-all duration-300 ${hasUploaded ? darkMode ? 'text-[#f0e9dd]' : 'text-ink' : darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`} style={{ fontFamily: 'var(--font-display)' }}>
+                  {hasUploaded ? 'Pick a style' : 'Style'}
                 </h3>
               </div>
 
               <div className="space-y-1.5">
                 <div>
-                  <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Pattern</label>
+                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pattern</label>
                   <select
-                    className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                    className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={style}
                     onChange={(e) => setStyle(e.target.value as any)}
                   >
@@ -1308,11 +1308,11 @@ export default function App() {
 
                 {style === 'upscale' && (
                   <div>
-                    <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>
+                    <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                       Color Mode
                     </label>
                     <select
-                      className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                      className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                       value={colorMode}
                       onChange={(e) => setColorMode(e.target.value as 'color' | 'mono')}
                     >
@@ -1325,11 +1325,11 @@ export default function App() {
                 {hasUploaded && <StyleTipBox />}
 
                 <div>
-                  <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Dot Size (mm)</label>
+                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Dot Size (mm)</label>
                   <input
                     type="number"
                     min="2" max="50"
-                    className={`w-full border-2 border-[#1a1a1a] p-1.5 text-xs font-medium outline-none transition-all focus:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] ${darkMode ? 'bg-[#1a1a1a] text-[#fff]' : 'bg-white text-[#1a1a1a]'}`}
+                    className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={dotSize}
                     onChange={(e) => setDotSize(clampDotSize(e.target.value))}
                   />
@@ -1337,16 +1337,16 @@ export default function App() {
 
                 {style !== 'dither' && style !== 'cmyk' && style !== 'upscale' && (
                   <div>
-                    <label className={`block text-xs font-bold mb-0.5 uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Angle</label>
+                    <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Angle</label>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="range"
                         min="0" max="90"
-                        className="flex-1 h-1.5 bg-[#1a1a1a]/10 appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#ff6b35] [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[#1a1a1a] [&::-webkit-slider-thumb]:rounded-none"
+                        className="flex-1 h-1.5 rounded-full bg-line appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-sm"
                         value={gridAngle}
                         onChange={(e) => setGridAngle(parseInt(e.target.value) || 0)}
                       />
-                      <span className={`text-xs font-bold font-mono w-8 text-right ${darkMode ? 'text-[#ff6b35]' : 'text-[#1a1a1a]'}`}>{gridAngle}°</span>
+                      <span className={`text-xs font-semibold font-mono w-8 text-right ${darkMode ? 'text-accent' : 'text-ink'}`}>{gridAngle}°</span>
                     </div>
                   </div>
                 )}
@@ -1356,11 +1356,11 @@ export default function App() {
                     <div className="relative">
                       <input
                         type="color"
-                        className="h-7 w-9 cursor-pointer border-0 p-0 rounded-none appearance-none"
+                        className="h-7 w-9 cursor-pointer border-0 p-0 rounded-md appearance-none"
                         value={dotColor}
                         onChange={(e) => setDotColor(e.target.value)}
                       />
-                      <div className="absolute inset-0 border-2 border-[#1a1a1a] pointer-events-none" />
+                      <div className="absolute inset-0 rounded-md border border-line-strong pointer-events-none" />
                     </div>
                     <span className={`text-xs font-bold font-mono ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>{dotColor.toUpperCase()}</span>
                   </div>
@@ -1371,23 +1371,15 @@ export default function App() {
         </div>
 
         {/* Preview Panel */}
-        <div className="flex-1 min-h-0 animate-slide-up stagger-5 pb-32">
-            <div className={`${darkMode ? 'bg-[#1a1a1a]' : 'bg-white'} border-3 border-[#1a1a1a] shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] p-2 h-full flex flex-col relative`}>
-              {/* Decorative corner accents */}
-              <div className="absolute top-0 left-0 w-8 h-8 overflow-hidden">
-                <div className="absolute top-2 left-2 w-full h-full bg-[#ff6b35] transform -translate-y-full" />
-              </div>
-              <div className="absolute bottom-0 right-0 w-8 h-8 overflow-hidden">
-                <div className="absolute bottom-2 right-2 w-full h-full bg-[#ff6eb4] transform translate-y-full" />
-              </div>
-
+        <div className="flex-1 min-h-0 animate-slide-up stagger-5 pb-28 xl:pb-0 xl:sticky xl:top-3 xl:h-[calc(100vh-6.5rem)]">
+            <div className={`${darkMode ? 'bg-[#211c17]' : 'bg-sheet'} border border-line rounded-2xl shadow-sheet p-3 h-full flex flex-col relative`}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <h3 className={`text-base font-bold flex items-center gap-2 ${darkMode ? 'text-[#faf8f3]' : 'text-[#1a1a1a]'}`} style={{ fontFamily: 'var(--font-display)' }}>
-                    <div className="w-2 h-2 bg-[#ff6b35]" />
-                    <div className="w-2 h-2 bg-[#ff6eb4]" />
-                    <div className="w-2 h-2 bg-[#6b9bd2]" />
-                    <span>PREVIEW</span>
+                  <h3 className={`text-lg font-bold flex items-center gap-2 ${darkMode ? 'text-[#f0e9dd]' : 'text-ink'}`} style={{ fontFamily: 'var(--font-display)' }}>
+                    <div className="w-2 h-2 rounded-full bg-accent" />
+                    <div className="w-2 h-2 rounded-full bg-blush" />
+                    <div className="w-2 h-2 rounded-full bg-sky" />
+                    <span>Preview</span>
                   </h3>
                   {image && (() => {
                     // Calculate pages based on layout mode
@@ -1414,7 +1406,7 @@ export default function App() {
                     const formattedHeight = wallUnit === 'imperial' ? wallDims.height.toFixed(1) : wallDims.height.toFixed(0);
 
                     return (
-                      <span className={`text-xs font-bold font-mono ${darkMode ? 'text-[#ff6b35]' : 'text-[#1a1a1a]/70'}`}>
+                      <span className={`text-xs font-semibold font-mono ${darkMode ? 'text-accent' : 'text-ink-soft'}`}>
                         {displayPagesWide} × {displayPagesHigh} pages ({formattedWidth} × {formattedHeight} {unitLabel})
                       </span>
                     );
@@ -1428,31 +1420,31 @@ export default function App() {
                         setZoom(1);
                         setPan({ x: 0, y: 0 });
                       }}
-                      className={`text-xs font-bold uppercase tracking-wide bg-[#ff6b35] hover:bg-[#ff6b35]/90 text-white px-1.5 py-1 border border-[#1a1a1a] shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:shadow-[1px_1px_0px_0px_rgba(26,26,26,1)] hover:translate-x-[1px] hover:translate-y-[1px] transition-all`}
+                      className={`text-xs font-semibold bg-accent hover:bg-accent-deep text-white px-2.5 py-1 rounded-full shadow-sm transition-all`}
                     >
-                      START OVER
+                      Start over
                     </button>
                   )}
                   {image && (
-                    <div className="flex items-center gap-0 border border-[#1a1a1a]">
+                    <div className="flex items-center rounded-full border border-line shadow-sheet overflow-hidden">
                       <button
                         onClick={handleZoomOut}
-                        className={`p-1.5 transition-colors ${darkMode ? 'hover:bg-[#333] text-[#999] hover:text-white' : 'hover:bg-[#f5f0e6] text-[#1a1a1a]/50 hover:text-[#1a1a1a]'}`}
+                        className={`p-1.5 transition-colors ${darkMode ? 'hover:bg-[#2a241e] text-[#a1988c] hover:text-white' : 'hover:bg-paper text-ink-soft hover:text-ink'}`}
                         title="Zoom out"
                       >
                         <ZoomOut className="w-3.5 h-3.5" />
                       </button>
-                      <span className={`text-xs font-bold font-mono min-w-[3.5rem] text-center ${darkMode ? 'text-[#ff6b35]' : 'text-[#1a1a1a]'}`}>{Math.round(zoom * 100)}%</span>
+                      <span className={`text-xs font-semibold font-mono min-w-[3.5rem] text-center ${darkMode ? 'text-accent' : 'text-ink'}`}>{Math.round(zoom * 100)}%</span>
                       <button
                         onClick={handleZoomIn}
-                        className={`p-1.5 transition-colors ${darkMode ? 'hover:bg-[#333] text-[#999] hover:text-white' : 'hover:bg-[#f5f0e6] text-[#1a1a1a]/50 hover:text-[#1a1a1a]'}`}
+                        className={`p-1.5 transition-colors ${darkMode ? 'hover:bg-[#2a241e] text-[#a1988c] hover:text-white' : 'hover:bg-paper text-ink-soft hover:text-ink'}`}
                         title="Zoom in"
                       >
                         <ZoomIn className="w-3.5 h-3.5" />
                       </button>
                       <button
                         onClick={handleResetZoom}
-                        className={`p-1.5 transition-colors ${darkMode ? 'hover:bg-[#333] text-[#999] hover:text-white' : 'hover:bg-[#f5f0e6] text-[#1a1a1a]/50 hover:text-[#1a1a1a]'}`}
+                        className={`p-1.5 transition-colors ${darkMode ? 'hover:bg-[#2a241e] text-[#a1988c] hover:text-white' : 'hover:bg-paper text-ink-soft hover:text-ink'}`}
                         title="Reset zoom"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
@@ -1464,7 +1456,7 @@ export default function App() {
 
               <div
                 ref={previewContainerRef}
-                className={`flex-1 border-3 border-[#1a1a1a] flex items-center justify-center p-1.5 overflow-hidden min-h-[300px] ${image ? 'cursor-grab active:cursor-grabbing' : ''} ${darkMode ? 'bg-[#0f0f0f]' : 'bg-[#f5f0e6]'}`}
+                className={`flex-1 rounded-xl border flex items-center justify-center p-2 overflow-hidden min-h-[300px] ${image ? 'cursor-grab active:cursor-grabbing' : ''} ${darkMode ? 'border-[#3a332b] bg-[#191512]' : 'border-line bg-paper'}`}
                 onMouseDown={handlePanStart}
                 onMouseMove={handlePanMove}
                 onMouseUp={handlePanEnd}
@@ -1472,38 +1464,50 @@ export default function App() {
               >
                 {!image ? (
                   <div
-                    className={`relative flex flex-col items-center justify-center w-full h-full border-3 border-dashed rounded-none transition-all duration-200 cursor-pointer ${isDragging ? 'border-[#ff6b35] bg-[#ff6b35]/10 scale-[1.02]' : darkMode ? 'border-[#333] bg-[#1a1a1a]/50 hover:bg-[#1a1a1a]' : 'border-[#1a1a1a]/30 bg-[#f5f0e6]/50 hover:bg-[#f5f0e6]'}`}
+                    className={`relative flex flex-col items-center justify-center w-full h-full rounded-2xl border-2 border-dashed transition-all duration-200 cursor-pointer ${isDragging ? 'border-accent bg-accent/5 scale-[1.01]' : darkMode ? 'border-[#3a332b] bg-white/[0.03] hover:bg-white/[0.05]' : 'border-line-strong bg-paper/60 hover:bg-paper'}`}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                   >
-                    {/* Privacy Tape Badge */}
+                    {/* Animated cut line */}
+                    <svg aria-hidden="true" className="pointer-events-none absolute inset-2 h-[calc(100%-16px)] w-[calc(100%-16px)]">
+                      <rect
+                        className="ants-rect"
+                        x="1"
+                        y="1"
+                        fill="none"
+                        stroke={isDragging ? '#e85d2f' : darkMode ? '#3a332b' : '#c9bca6'}
+                        strokeWidth="1.5"
+                        strokeDasharray="10 6"
+                        rx="14"
+                        style={{ width: 'calc(100% - 2px)', height: 'calc(100% - 2px)' }}
+                      />
+                    </svg>
+
+                    {/* Privacy stamp */}
                     <PrivacyTapeBadge />
 
-                    <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer">
-                      {/* Bulls-eye target */}
-                      <div className="relative mb-6">
-                        {/* Outer ring */}
-                        <div className="w-48 h-48 rounded-full border-4 border-[#ff6b35] flex items-center justify-center animate-pulse">
-                          {/* Middle ring */}
-                          <div className="w-32 h-32 rounded-full border-4 border-[#ff6eb4] flex items-center justify-center">
-                            {/* Inner ring */}
-                            <div className="w-16 h-16 rounded-full bg-[#6b9bd2] flex items-center justify-center">
-                              <Target className="w-8 h-8 text-white" />
-                            </div>
+                    <label className="flex flex-1 flex-col items-center justify-center w-full min-h-0 cursor-pointer px-6 text-center">
+                      {/* Bullseye */}
+                      <div className="relative mb-5">
+                        <div
+                          className="flex h-24 w-24 items-center justify-center rounded-full bg-accent/10 transition-transform duration-300"
+                          style={{ transform: isDragging ? 'scale(1.08)' : undefined }}
+                        >
+                          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent text-white shadow-lift">
+                            <Target className="h-8 w-8" />
                           </div>
                         </div>
                       </div>
 
-                      {/* Playful copy */}
-                      <p className={`text-2xl font-bold mb-3 transition-colors ${isDragging ? 'text-[#ff6b35]' : darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/80'}`}>
-                        DROP YOUR PHOTO RIGHT HERE!
+                      <p className={`text-2xl font-bold tracking-tight mb-2 transition-colors ${isDragging ? 'text-accent' : darkMode ? 'text-[#f0e9dd]' : 'text-ink'}`}>
+                        Drop a photo. Get a giant poster.
                       </p>
-                      <p className={`text-lg mb-2 transition-colors ${isDragging ? 'text-[#ff6b35]' : darkMode ? 'text-[#666]' : 'text-[#1a1a1a]/60'}`}>
-                        Let's make a GIANT poster! 🖼️
+                      <p className={`text-sm max-w-md mb-3 transition-colors ${isDragging ? 'text-accent' : darkMode ? 'text-[#8d8375]' : 'text-ink-soft'}`}>
+                        Any image gets sliced into printer-friendly pages — trim, tape them together, and suddenly: wall art.
                       </p>
-                      <p className={`text-sm transition-colors ${isDragging ? 'text-[#ff6b35]' : darkMode ? 'text-[#555]' : 'text-[#1a1a1a]/40'}`}>
-                        Or <span className="underline underline-offset-1 decoration-2 decoration-[#ff6b35] font-bold">tap to browse</span>
+                      <p className={`text-sm transition-colors ${isDragging ? 'text-accent' : darkMode ? 'text-[#6b6156]' : 'text-ink-soft/80'}`}>
+                        Or <span className="underline underline-offset-2 decoration-2 decoration-accent/60 font-semibold">browse your files</span>
                       </p>
                       <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                     </label>
@@ -1514,15 +1518,15 @@ export default function App() {
                         e.stopPropagation();
                         loadSampleImage();
                       }}
-                      className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-[#ffbe0b] hover:bg-[#ffbe0b]/90 text-[#1a1a1a] font-bold px-4 py-2 border-3 border-[#1a1a1a] shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-[calc(-50%+2px)] hover:translate-y-[2px] transition-all"
+                      className="mb-6 flex items-center gap-2 bg-sheet hover:bg-white text-ink font-semibold text-sm px-4 py-2 rounded-full border border-line shadow-sheet hover:shadow-lift hover:-translate-y-0.5 transition-all"
                     >
-                      <FileImage className="w-4 h-4" />
-                      <span>TRY THE SAMPLE POSTER</span>
+                      <FileImage className="w-4 h-4 text-accent" />
+                      <span>No photo handy? Try ours</span>
                     </button>
                   </div>
                 ) : (
                   <div
-                    className="transition-transform duration-75 ease-out shadow-lg border-4 border-[#1a1a1a] bg-white"
+                    className="transition-transform duration-75 ease-out shadow-lift rounded-md bg-white ring-1 ring-line"
                     style={{
                       transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
                       cursor: zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default'
@@ -1539,14 +1543,14 @@ export default function App() {
           </div>
 
         {/* Fixed Output Bar - Always visible at bottom */}
-        <div className={`fixed bottom-0 left-0 right-0 ${darkMode ? 'bg-[#1a1a1a]' : 'bg-white'} border-t-4 border-[#1a1a1a] shadow-[0_-4px_0px_0px_rgba(26,26,26,1)] z-40`}>
+        <div className={`fixed bottom-0 left-0 right-0 z-40 border-t ${darkMode ? 'border-[#3a332b] bg-[#211c17]' : 'border-line bg-sheet'} shadow-[0_-8px_24px_rgba(33,29,25,0.08)]`}>
           <div className="max-w-7xl mx-auto px-3 py-2 flex flex-col xl:flex-row items-center gap-3">
             {/* Left: Heading and Options */}
             <div className="flex items-center gap-3 flex-1">
               <div className="flex items-center gap-1.5">
-                <div className={`w-6 h-6 border-2 border-[#1a1a1a] flex items-center justify-center font-bold text-xs transition-all duration-300 shrink-0 ${hasUploaded ? 'bg-[#6b9bd2] text-white' : 'bg-white text-[#999]'}`}>3</div>
-                <h3 className={`text-base font-bold transition-all duration-300 ${hasUploaded ? darkMode ? 'text-[#faf8f3]' : 'text-[#1a1a1a]' : darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/40'}`} style={{ fontFamily: 'var(--font-display)' }}>
-                  {hasUploaded ? 'MAKE IT HAPPEN!' : 'OUTPUT'}
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs font-semibold transition-all duration-300 shrink-0 ${hasUploaded ? 'bg-sky text-white' : darkMode ? 'bg-[#2a241e] text-[#a1988c]' : 'bg-paper text-ink-soft'}`}>3</div>
+                <h3 className={`text-lg font-bold tracking-tight transition-all duration-300 ${hasUploaded ? darkMode ? 'text-[#f0e9dd]' : 'text-ink' : darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`} style={{ fontFamily: 'var(--font-display)' }}>
+                  {hasUploaded ? 'Print it' : 'Output'}
                 </h3>
               </div>
 
@@ -1559,11 +1563,11 @@ export default function App() {
                       checked={cropMarks}
                       onChange={(e) => setCropMarks(e.target.checked)}
                     />
-                    <div className={`w-4 h-4 border-2 border-[#1a1a1a] bg-white peer-checked:bg-[#ff6b35] transition-colors flex items-center justify-center`}>
+                    <div className={`w-4 h-4 rounded border border-line-strong bg-white peer-checked:bg-accent peer-checked:border-accent transition-colors flex items-center justify-center`}>
                       {cropMarks && <span className="text-white text-[10px] font-bold">✓</span>}
                     </div>
                   </div>
-                  <span className={`text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Add crop marks for easy cutting ✂️</span>
+                  <span className={`text-xs font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Crop marks for easy trimming</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1574,11 +1578,11 @@ export default function App() {
                       checked={skipBlankPages}
                       onChange={(e) => setSkipBlankPages(e.target.checked)}
                     />
-                    <div className={`w-4 h-4 border-2 border-[#1a1a1a] bg-white peer-checked:bg-[#ff6eb4] transition-colors flex items-center justify-center`}>
+                    <div className={`w-4 h-4 rounded border border-line-strong bg-white peer-checked:bg-blush peer-checked:border-blush transition-colors flex items-center justify-center`}>
                       {skipBlankPages && <span className="text-white text-[10px] font-bold">✓</span>}
                     </div>
                   </div>
-                  <span className={`text-xs font-bold uppercase tracking-wide ${darkMode ? 'text-[#999]' : 'text-[#1a1a1a]/70'}`}>Skip empty pages (saves paper!) 📄</span>
+                  <span className={`text-xs font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Skip blank pages (saves paper)</span>
                 </label>
 
                 {skipBlankPages && preserveAspectRatio && image && (() => {
@@ -1588,8 +1592,8 @@ export default function App() {
                   const pagesSkipped = totalPages - pagesWithContent;
                   if (pagesSkipped > 0) {
                     return (
-                      <div className={`px-2 py-1 border-2 border-[#1a1a1a] ${darkMode ? 'bg-[#1a1a1a]/30' : 'bg-[#f5f0e6]/50'}`}>
-                        <p className={`text-[10px] font-bold ${darkMode ? 'text-[#ff6eb4]' : 'text-[#1a1a1a]/70'}`}>
+                      <div className={`px-2.5 py-1 rounded-lg border ${darkMode ? 'border-[#3a332b] bg-white/5' : 'border-line bg-paper/70'}`}>
+                        <p className={`text-xs font-semibold ${darkMode ? 'text-blush' : 'text-ink-soft'}`}>
                           Skip {pagesSkipped} blank page{pagesSkipped !== 1 ? 's' : ''}
                         </p>
                       </div>
@@ -1599,7 +1603,7 @@ export default function App() {
                 })()}
 
                 {status && (
-                  <p className={`text-xs font-bold ${status.includes('Error') ? 'text-[#e63946]' : 'text-[#69be28]'}`}>
+                  <p className={`text-xs font-semibold ${status.includes('Error') ? 'text-[#c0452f]' : 'text-moss'}`}>
                     {status}
                   </p>
                 )}
@@ -1611,26 +1615,26 @@ export default function App() {
               <button
                 onClick={generatePDF}
                 disabled={!image || isGenerating}
-                className="btn-riso flex items-center justify-center gap-2 bg-[#ff6b35] hover:bg-[#ff6b35]/90 text-white font-bold py-2.5 px-6 border-3 border-[#1a1a1a] shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all disabled:from-[#999] disabled:to-[#888] disabled:shadow-none disabled:cursor-not-allowed disabled:translate-x-0 disabled:translate-y-0"
+                className="flex items-center justify-center gap-2 rounded-full bg-accent hover:bg-accent-deep text-white font-semibold py-3 px-7 shadow-lift transition-all hover:-translate-y-0.5 disabled:bg-line-strong disabled:text-ink-soft disabled:shadow-none disabled:cursor-not-allowed disabled:translate-y-0"
               >
                 {isGenerating ? (
                   <>
                     <span>✨</span>
-                    <span>Making magic...</span>
+                    <span>Ruling up pages…</span>
                   </>
                 ) : generationComplete ? (
                   <>
-                    <span>✅</span>
-                    <span>YOU DID IT!</span>
+                    <span>✓</span>
+                    <span>Ready to print!</span>
                   </>
                 ) : (
                   <>
                     <Download className="w-4 h-4" />
-                    <span>DOWNLOAD YOUR GIANT POSTER 📥</span>
+                    <span>Make it huge</span>
                   </>
                 )}
               </button>
-              <Confetti trigger={generationComplete} />
+              <Stamp trigger={generationComplete} />
             </div>
             {generationComplete && (
               <button
@@ -1642,10 +1646,10 @@ export default function App() {
                   setPan({ x: 0, y: 0 });
                   setStatus('');
                 }}
-                className="flex items-center justify-center gap-2 bg-white hover:bg-[#f5f0e6] text-[#1a1a1a] font-bold py-2.5 px-6 border-3 border-[#1a1a1a] shadow-[4px_4px_0px_0px_rgba(26,26,26,1)] hover:shadow-[2px_2px_0px_0px_rgba(26,26,26,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
+                className="flex items-center justify-center gap-2 rounded-full border border-line bg-sheet hover:bg-paper text-ink font-semibold py-3 px-6 shadow-sheet hover:shadow-lift transition-all hover:-translate-y-0.5"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span>MAKE ANOTHER</span>
+                <span>Make another</span>
               </button>
             )}
           </div>
@@ -1654,10 +1658,10 @@ export default function App() {
         {/* Floating Theme Toggle */}
         <button
           onClick={() => setDarkMode(!darkMode)}
-          className={`fixed top-4 right-4 p-2 border-2 border-[#1a1a1a] transition-all duration-200 shadow-[3px_3px_0px_0px_rgba(26,26,26,1)] hover:shadow-[1.5px_1.5px_0px_0px_rgba(26,26,26,1)] hover:translate-x-[1.5px] hover:translate-y-[1.5px] z-50 ${darkMode ? 'bg-[#1a1a1a] hover:bg-[#ff6b35]' : 'bg-white hover:bg-[#ff6b35]'}`}
+          className={`fixed top-4 right-4 z-50 rounded-full border p-2.5 shadow-sheet transition-all hover:shadow-lift hover:-translate-y-0.5 ${darkMode ? 'border-[#3a332b] bg-[#2a241e] hover:bg-accent' : 'border-line bg-sheet hover:bg-accent'}`}
           aria-label="Toggle dark mode"
         >
-          {darkMode ? <Sun className="w-5 h-5 text-[#ff6b35]" /> : <Moon className="w-5 h-5 text-[#1a1a1a]" />}
+          {darkMode ? <Sun className="w-5 h-5 text-accent" /> : <Moon className="w-5 h-5 text-ink" />}
         </button>
 
         {/* Footer */}
