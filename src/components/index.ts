@@ -1,3 +1,3 @@
 export { StyleTipBox } from "./StyleTipBox";
-export { Confetti } from "./Confetti";
+export { Stamp } from "./Stamp";
 export { PrivacyTapeBadge } from "./PrivacyTapeBadge";
