@@ -21,7 +21,7 @@ export function Stamp({ trigger }: { trigger: boolean }) {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2"
+      className="pointer-events-none fixed bottom-32 left-1/2 z-50 -translate-x-1/2"
     >
       <div className="stamp-slam rounded-xl border-4 border-moss/70 px-6 py-3 text-center shadow-sheet"
         style={{ backgroundColor: 'rgba(255, 252, 245, 0.82)', backdropFilter: 'blur(2px)' }}

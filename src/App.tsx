@@ -960,7 +960,7 @@ export default function App() {
       <div className="fixed inset-0 paper-texture pointer-events-none z-50" />
       <div className="fixed inset-0 halftone-overlay pointer-events-none z-50" />
 
-      <div className="max-w-7xl mx-auto px-3 py-2 lg:py-3 relative z-10 min-h-screen flex flex-col xl:flex-row gap-3 pb-24">
+      <div className="max-w-7xl mx-auto px-3 pt-2 lg:pt-3 relative z-10 min-h-screen flex flex-col xl:flex-row gap-3 pb-40">
         {/* Left Column - Header + Controls */}
         <div className="w-full xl:w-[320px] flex flex-col flex-shrink-0 space-y-2 pb-32 xl:pb-0">
           {/* Header */}
