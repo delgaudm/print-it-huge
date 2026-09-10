@@ -1,6 +1,8 @@
 {
   "name": "print-it-huge",
   "version": "0.7.0",
+  "author": "Mike DelGaudio",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "engines": {
     "node": ">=20"

@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
-import { FileImage, Download, Sun, Moon, ZoomIn, ZoomOut, RotateCcw, Target } from 'lucide-react';
-import { StyleTipBox, Stamp, PrivacyTapeBadge } from './components';
+import { FileImage, Download, Sun, Moon, ZoomIn, ZoomOut, RotateCcw, Target, BarChart3 } from 'lucide-react';
+import { StyleTipBox, Stamp, PrivacyTapeBadge, GalleryModal, StatsModal } from './components';
+import { GalleryItem, fetchGalleryItems, galleryImageUrl } from './lib/gallery';
+import { trackEvent } from './lib/stats';
 
 const paperDims = {
   letter: { width: 215.9, height: 279.4 },
@@ -55,6 +57,14 @@ export default function App() {
   const [hasUploaded, setHasUploaded] = useState(false);
   const [generationComplete, setGenerationComplete] = useState(false);
   const [colorMode, setColorMode] = useState<'color' | 'mono'>('color');
+  const [includeInstructions, setIncludeInstructions] = useState(true);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[] | null>(null);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
+  const [loadingGallerySlug, setLoadingGallerySlug] = useState<string | null>(null);
+  const [imageCredit, setImageCredit] = useState<string | null>(null);
+
+  const galleryObjectUrlRef = useRef<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
@@ -71,6 +81,7 @@ export default function App() {
         setHasUploaded(true);
         setZoom(1);
         setPan({ x: 0, y: 0 });
+        trackEvent({ name: 'image_loaded', source: 'upload' });
       };
       img.src = event.target?.result as string;
     };
@@ -83,7 +94,10 @@ export default function App() {
     setIsDragging(false);
 
     const file = e.dataTransfer.files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file || !file.type.startsWith('image/')) {
+      setStatus('That file is not an image — drop a JPG, PNG, or WebP.');
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -93,63 +107,60 @@ export default function App() {
         setHasUploaded(true);
         setZoom(1);
         setPan({ x: 0, y: 0 });
+        trackEvent({ name: 'image_loaded', source: 'drop' });
       };
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
 
-  const loadSampleImage = () => {
-    const sampleCanvas = document.createElement('canvas');
-    sampleCanvas.width = 900;
-    sampleCanvas.height = 1200;
-    const ctx = sampleCanvas.getContext('2d');
-    if (!ctx) return;
+  // The gallery manifest lives in /public; fetch it once per session.
+  useEffect(() => {
+    fetchGalleryItems()
+      .then(setGalleryItems)
+      .catch(() => {
+        setGalleryItems([]);
+        setStatus('Error loading the sample gallery — you can still upload your own image.');
+      });
+  }, []);
 
-    const sky = ctx.createLinearGradient(0, 0, 0, sampleCanvas.height);
-    sky.addColorStop(0, '#6b9bd2');
-    sky.addColorStop(0.55, '#faf8f3');
-    sky.addColorStop(1, '#ffbe0b');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, sampleCanvas.width, sampleCanvas.height);
-
-    ctx.fillStyle = '#ff6eb4';
-    ctx.beginPath();
-    ctx.arc(675, 260, 150, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#1a1a1a';
-    ctx.beginPath();
-    ctx.moveTo(0, 875);
-    ctx.lineTo(260, 460);
-    ctx.lineTo(480, 875);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#2ec4b6';
-    ctx.beginPath();
-    ctx.moveTo(270, 900);
-    ctx.lineTo(590, 380);
-    ctx.lineTo(900, 900);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#ff6b35';
-    ctx.fillRect(0, 875, sampleCanvas.width, 325);
-
-    ctx.fillStyle = 'rgba(250, 248, 243, 0.88)';
-    ctx.font = 'bold 118px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('HUGE', 450, 1035);
-
-    const img = new Image();
-    img.onload = () => {
-      setImage(img);
-      setHasUploaded(true);
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
-    };
-    img.src = sampleCanvas.toDataURL('image/png');
+  const loadGalleryImage = (item: GalleryItem) => {
+    if (loadingGallerySlug) return;
+    setLoadingGallerySlug(item.slug);
+    setStatus(`Fetching ${item.title}…`);
+    fetch(galleryImageUrl(item))
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          if (galleryObjectUrlRef.current) URL.revokeObjectURL(galleryObjectUrlRef.current);
+          galleryObjectUrlRef.current = url;
+          setImage(img);
+          setHasUploaded(true);
+          setOrientation(item.orientation === 'landscape' ? 'landscape' : 'portrait');
+          setImageCredit(`${item.title} — ${item.artist}, ${item.year} · ${item.license}`);
+          setGalleryOpen(false);
+          setLoadingGallerySlug(null);
+          setZoom(1);
+          setPan({ x: 0, y: 0 });
+          setStatus('');
+          trackEvent({ name: 'image_loaded', source: 'gallery' });
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          setLoadingGallerySlug(null);
+          setStatus('Error loading that image — try another one.');
+        };
+        img.src = url;
+      })
+      .catch(() => {
+        setLoadingGallerySlug(null);
+        setStatus('Error loading that image — try another one.');
+      });
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -374,10 +385,17 @@ export default function App() {
 
     const math = getLayoutMath();
 
-    const maxWidth = 500;
-    const scale = maxWidth / math.totalWidthMm;
-    canvas.width = maxWidth;
-    canvas.height = math.totalHeightMm * scale;
+    // Render at device pixel ratio so the preview stays crisp on hi-dpi
+    // screens; all drawing below happens in CSS-pixel coordinates.
+    const cssWidth = 500;
+    const scale = cssWidth / math.totalWidthMm;
+    const cssHeight = math.totalHeightMm * scale;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(cssWidth * dpr);
+    canvas.height = Math.round(cssHeight * dpr);
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+    ctx.scale(dpr, dpr);
 
     // Draw image with padding if preserving aspect ratio
     const imgCanvas = document.createElement('canvas');
@@ -392,7 +410,7 @@ export default function App() {
     const imgData = imgCtx.getImageData(0, 0, imgCols, imgRows).data;
 
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, cssWidth, cssHeight);
     ctx.fillStyle = dotColor;
 
     const previewDotMaxRadius = (math.dotSize * scale) / 2;
@@ -477,10 +495,9 @@ export default function App() {
       ctx.globalCompositeOperation = 'source-over';
     } else if (style === 'upscale') {
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, cssWidth, cssHeight);
 
-      const renderScale = canvas.width / math.totalWidthMm;
-      ctx.drawImage(image, 0, 0, math.totalWidthMm * renderScale, math.totalHeightMm * renderScale);
+      ctx.drawImage(image, 0, 0, cssWidth, cssHeight);
 
       if (colorMode === 'mono') {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -619,6 +636,139 @@ export default function App() {
     }
   }, [image, paperSize, orientation, pagesWide, pagesHigh, dotSize, dotColor, style, gridAngle, colorMode, preserveAspectRatio]);
 
+  // Page 1 of the PDF: a printable job ticket. The PDF outlives the browsing
+  // session — whoever prints it (days later, at a copy shop) needs the
+  // "print at 100%" rule and the assembly map standing next to the poster.
+  const drawInstructionsPage = (doc: jsPDF, math: ReturnType<typeof getLayoutMath>, img: HTMLImageElement) => {
+    const { pWidth, pHeight, gridW, gridH, totalWidthMm, totalHeightMm } = math;
+    const ink = '#211d19';
+    const soft = '#6e655a';
+    const faint = '#a1988c';
+    const accent = '#e85d2f';
+    const MARGIN = 14;
+
+    let y = 18;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(accent);
+    doc.text('PRINT IT HUGE — JOB TICKET', MARGIN, y);
+    y += 11;
+    doc.setFontSize(22);
+    doc.setTextColor(ink);
+    doc.text('How to print your poster', MARGIN, y);
+    y += 5;
+    doc.setDrawColor('#e4daca');
+    doc.setLineWidth(0.5);
+    doc.line(MARGIN, y, pWidth - MARGIN, y);
+    y += 7;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(soft);
+    doc.text('This page is for humans. The poster starts on page 2.', MARGIN, y);
+
+    // Mini-map of the whole poster: the image with page-break grid overlaid.
+    const mapMaxW = 60;
+    const mapMaxH = 72;
+    const aspect = totalWidthMm / totalHeightMm;
+    let mapW = mapMaxW;
+    let mapH = mapMaxW / aspect;
+    if (mapH > mapMaxH) {
+      mapH = mapMaxH;
+      mapW = mapMaxH * aspect;
+    }
+    const mapX = pWidth - MARGIN - mapW;
+    const mapY = y + 6;
+
+    const thumbW = Math.min(320, img.width);
+    const thumbH = Math.round(thumbW * (img.height / img.width));
+    const thumbCanvas = document.createElement('canvas');
+    thumbCanvas.width = thumbW;
+    thumbCanvas.height = thumbH;
+    const thumbCtx = thumbCanvas.getContext('2d');
+    if (thumbCtx) {
+      thumbCtx.drawImage(img, 0, 0, thumbW, thumbH);
+      doc.addImage(thumbCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', mapX, mapY, mapW, mapH);
+    }
+    doc.setDrawColor('#c9bca6');
+    doc.setLineWidth(0.4);
+    doc.rect(mapX, mapY, mapW, mapH);
+    doc.setDrawColor('#e63946');
+    doc.setLineWidth(0.35);
+    for (let c = 1; c < gridW; c++) {
+      const lx = mapX + (c * pWidth / totalWidthMm) * mapW;
+      doc.line(lx, mapY, lx, mapY + mapH);
+    }
+    for (let r = 1; r < gridH; r++) {
+      const ly = mapY + (r * pHeight / totalHeightMm) * mapH;
+      doc.line(mapX, ly, mapX + mapW, ly);
+    }
+    let captionY = mapY + mapH + 5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(ink);
+    doc.text(`${gridW} pages wide × ${gridH} pages high`, mapX + mapW / 2, captionY, { align: 'center' });
+    captionY += 5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(soft);
+    doc.text(
+      `${(totalWidthMm / 10).toFixed(0)} × ${(totalHeightMm / 10).toFixed(0)} cm  ·  ${(totalWidthMm / 25.4).toFixed(1)} × ${(totalHeightMm / 25.4).toFixed(1)} in`,
+      mapX + mapW / 2,
+      captionY,
+      { align: 'center' }
+    );
+
+    // Steps, left column (wrapped so they never run under the mini-map).
+    const colW = mapX - MARGIN - 10;
+    const inches = (mm: number) => (mm / 25.4).toFixed(1);
+    const steps: Array<[string, string]> = [
+      ['1. Print at 100% scale.', 'In the print dialog choose Actual Size (100%) and turn OFF "Fit to page". This is the one rule that matters.'],
+      ['2. Check the ruler bar.', 'After printing, measure the bar at the bottom of this page. Not exactly 10 cm? The printer scaled the pages — reprint at Actual Size.'],
+      ['3. Trim on the marks.', cropMarks
+        ? 'Every page has light gray crop marks in the corners — cut them off.'
+        : 'These pages have no crop marks — butt the paper edges together as you assemble.'],
+      ['4. Use the labels.', 'Each sheet is printed with "Row 1, Col 2" in its bottom-right corner. Match it to the mini-map.'],
+      ...(skipBlankPages ? [['5. Blank pages were skipped.', 'Sheets only exist where the image has content — the map shows the full shape.'] as [string, string]] : []),
+      [`${skipBlankPages ? 6 : 5}. Tape from behind.`, `Assemble rows first, then columns, taping on the back. Finished size: ${(totalWidthMm / 10).toFixed(0)} × ${(totalHeightMm / 10).toFixed(0)} cm (${inches(totalWidthMm)} × ${inches(totalHeightMm)} in).`]
+    ];
+
+    let stepY = mapY;
+    for (const [title, body] of steps) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(accent);
+      doc.text(title, MARGIN, stepY);
+      stepY += 4.6;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9.5);
+      doc.setTextColor(soft);
+      const bodyLines = doc.splitTextToSize(body, colW);
+      doc.text(bodyLines, MARGIN + 4, stepY);
+      stepY += bodyLines.length * 4.2 + 4;
+    }
+
+    // 100 mm calibration bar: if this isn't 10 cm on paper, pages were scaled.
+    const rulerY = Math.max(stepY + 6, pHeight - 46);
+    doc.setDrawColor(ink);
+    doc.setLineWidth(0.5);
+    doc.rect(MARGIN, rulerY, 100, 5);
+    doc.line(MARGIN, rulerY - 3, MARGIN, rulerY);
+    doc.line(MARGIN + 100, rulerY - 3, MARGIN + 100, rulerY);
+    doc.line(MARGIN + 50, rulerY - 2, MARGIN + 50, rulerY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(soft);
+    const rulerCaption = doc.splitTextToSize(
+      'This bar is exactly 10 cm. If it is not 10 cm on your printout, the printer scaled the pages — reprint at 100% / Actual Size.',
+      110
+    );
+    doc.text(rulerCaption, MARGIN, rulerY + 10);
+
+    doc.setFontSize(8);
+    doc.setTextColor(faint);
+    doc.text(`0 uploads · 0 servers · 100% yours · generated ${new Date().toLocaleDateString()}`, MARGIN, pHeight - 8);
+  };
+
   const generatePDF = () => {
     if (!image) return;
 
@@ -651,6 +801,11 @@ export default function App() {
 
         const maxRadius = math.dotSize / 2;
         let isFirstPage = true;
+
+        if (includeInstructions) {
+          drawInstructionsPage(doc, math, image);
+          isFirstPage = false;
+        }
 
         let ditherData: Float32Array | null = null;
         let cmykData: Float32Array | null = null;
@@ -941,12 +1096,27 @@ export default function App() {
         }
 
         doc.save('PrintItHuge_Poster.pdf');
+        // Anonymous counter only — options as numbers/enums, never the image.
+        const printedPages = skipBlankPages && preserveAspectRatio
+          ? (math.contentPages?.size ?? math.gridW * math.gridH)
+          : math.gridW * math.gridH;
+        trackEvent({
+          name: 'poster_generated',
+          style,
+          paper: paperSize,
+          orientation,
+          colorMode,
+          layoutMode,
+          pages: printedPages,
+          area_cm2: Math.round((math.totalWidthMm * math.totalHeightMm) / 100),
+        });
         clearTimeout(statusTimer1);
         clearTimeout(statusTimer2);
-        setStatus('Downloaded! Your photo never left your computer.');
+        setStatus('Downloaded! Print at 100% scale ("Actual size") — page 1 has the full instructions.');
         setGenerationComplete(true);
       } catch (error) {
         console.error(error);
+        trackEvent({ name: 'poster_error', style });
         setStatus('Error generating PDF. Try smaller dimensions or a larger dot size.');
       } finally {
         setIsGenerating(false);
@@ -961,13 +1131,15 @@ export default function App() {
       <div className="fixed inset-0 halftone-overlay pointer-events-none z-50" />
 
       <div className="max-w-7xl mx-auto px-3 pt-2 lg:pt-3 relative z-10 min-h-screen flex flex-col xl:flex-row gap-3 pb-40">
-        {/* Left Column - Header + Controls */}
-        <div className="w-full xl:w-[320px] flex flex-col flex-shrink-0 space-y-2 pb-32 xl:pb-0">
+        {/* Left Column - Header + Controls. Below xl the column wrappers
+            dissolve (display: contents) so the drop zone can sort ahead of
+            the control panels instead of trapping them below the fold. */}
+        <div className="w-full xl:w-[320px] flex flex-col flex-shrink-0 space-y-2 pb-32 xl:pb-0 max-xl:contents">
           {/* Header */}
-          <header className="animate-slide-up">
-            <div className="relative">
-              <div className="bg-sheet border border-line rounded-2xl p-4 shadow-sheet relative">
-                <h1 className="text-3xl lg:text-4xl font-extrabold tracking-tight text-ink" style={{ fontFamily: 'var(--font-display)' }}>
+          <header className="animate-slide-up max-xl:order-1">
+            <div className={`relative`}>
+              <div className={`${darkMode ? 'bg-[#211c17] border-[#3a332b]' : 'bg-sheet border-line'} border rounded-2xl p-4 shadow-sheet relative`}>
+                <h1 className={`text-3xl lg:text-4xl font-extrabold tracking-tight ${darkMode ? 'text-[#f0e9dd]' : 'text-ink'}`} style={{ fontFamily: 'var(--font-display)' }}>
                   Print It Huge
                 </h1>
                 <div className="mt-2 flex items-center gap-1">
@@ -975,17 +1147,24 @@ export default function App() {
                   <div className="h-0.5 flex-1 rounded-full bg-blush" />
                   <div className="h-0.5 flex-1 rounded-full bg-sky" />
                 </div>
-                <p className="mt-1.5 text-sm text-ink-soft">
+                <p className={`mt-1.5 text-sm ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                   Turn any image into a wall-size poster — on the printer you already own.
                 </p>
+                <button
+                  onClick={() => setStatsOpen(true)}
+                  className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-all hover:border-accent hover:bg-accent hover:text-white ${darkMode ? 'border-[#3a332b] bg-[#2a241e] text-[#a1988c]' : 'border-line bg-paper text-ink-soft'}`}
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  Shop stats
+                </button>
               </div>
             </div>
           </header>
 
           {/* Controls Panel */}
-          <div className="w-full space-y-2 animate-slide-up stagger-1">
+          <div className="w-full space-y-2 animate-slide-up stagger-1 max-xl:contents">
             {/* Unified Layout Section */}
-            <div className={`${darkMode ? 'bg-[#211c17]' : 'bg-sheet'} border border-line rounded-2xl shadow-sheet p-4 animate-slide-up stagger-1 transition-all duration-300 ${hasUploaded ? 'opacity-100' : 'opacity-30'}`}>
+            <div className={`${darkMode ? 'bg-[#211c17]' : 'bg-sheet'} border border-line rounded-2xl shadow-sheet p-4 animate-slide-up stagger-1 transition-all duration-300 ${hasUploaded ? 'opacity-100' : 'opacity-30'} max-xl:order-3`} inert={!hasUploaded}>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs font-semibold transition-all duration-300 shrink-0 ${hasUploaded ? 'bg-accent text-white' : darkMode ? 'bg-[#2a241e] text-[#a1988c]' : 'bg-paper text-ink-soft'}`}>1</div>
                 <h3 className={`text-lg font-bold tracking-tight transition-all duration-300 ${hasUploaded ? darkMode ? 'text-[#f0e9dd]' : 'text-ink' : darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`} style={{ fontFamily: 'var(--font-display)' }}>
@@ -996,10 +1175,11 @@ export default function App() {
               <div className="space-y-2">
                 {/* Mode Toggle */}
                 <div>
-                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
+                  <label htmlFor="layoutMode" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                     Calculate by:
                   </label>
                   <select
+                    id="layoutMode"
                     className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={layoutMode}
                     onChange={(e) => {
@@ -1030,8 +1210,9 @@ export default function App() {
 
                 {/* Paper Format */}
                 <div>
-                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Paper Format</label>
+                  <label htmlFor="paperFormat" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Paper Format</label>
                   <select
+                    id="paperFormat"
                     className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={paperSize}
                     onChange={(e) => {
@@ -1058,8 +1239,9 @@ export default function App() {
 
                 {/* Orientation */}
                 <div>
-                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Orientation</label>
+                  <label htmlFor="orientation" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Orientation</label>
                   <select
+                    id="orientation"
                     className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={orientation}
                     onChange={(e) => {
@@ -1089,8 +1271,9 @@ export default function App() {
                   // Wall Space Inputs
                   <>
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Measurement Unit</label>
+                      <label htmlFor="wallUnit" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Measurement Unit</label>
                       <select
+                        id="wallUnit"
                         className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                         value={wallUnit}
                         onChange={(e) => setWallUnit(e.target.value as 'imperial' | 'metric')}
@@ -1102,10 +1285,11 @@ export default function App() {
 
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
+                        <label htmlFor="wallWidth" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                           Width ({wallUnit === 'imperial' ? 'ft' : 'mm'})
                         </label>
                         <input
+                          id="wallWidth"
                           type="number"
                           min="0.1" step="0.1"
                           placeholder={wallUnit === 'imperial' ? '4' : '1200'}
@@ -1125,10 +1309,11 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
+                        <label htmlFor="wallHeight" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                           Height ({wallUnit === 'imperial' ? 'ft' : 'mm'})
                         </label>
                         <input
+                          id="wallHeight"
                           type="number"
                           min="0.1" step="0.1"
                           placeholder={wallUnit === 'imperial' ? '7' : '2100'}
@@ -1153,8 +1338,9 @@ export default function App() {
                   // Pages Inputs
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pages Wide</label>
+                      <label htmlFor="pagesWide" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pages Wide</label>
                       <input
+                        id="pagesWide"
                         type="number"
                         min="1"
                         max={MAX_PAGES_PER_SIDE}
@@ -1164,8 +1350,9 @@ export default function App() {
                       />
                     </div>
                     <div>
-                      <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pages High</label>
+                      <label htmlFor="pagesHigh" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pages High</label>
                       <input
+                        id="pagesHigh"
                         type="number"
                         min="1"
                         max={MAX_PAGES_PER_SIDE}
@@ -1277,7 +1464,7 @@ export default function App() {
             </div>
 
             {/* Style Section */}
-            <div className={`${darkMode ? 'bg-[#211c17]' : 'bg-sheet'} border border-line rounded-2xl shadow-sheet p-4 animate-slide-up stagger-3 transition-all duration-300 ${hasUploaded ? 'opacity-100' : 'opacity-30'}`}>
+            <div className={`${darkMode ? 'bg-[#211c17]' : 'bg-sheet'} border border-line rounded-2xl shadow-sheet p-4 animate-slide-up stagger-3 transition-all duration-300 ${hasUploaded ? 'opacity-100' : 'opacity-30'} max-xl:order-4`} inert={!hasUploaded}>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs font-semibold transition-all duration-300 ${hasUploaded ? 'bg-blush text-white' : darkMode ? 'bg-[#2a241e] text-[#a1988c]' : 'bg-paper text-ink-soft'}`}>2</div>
                 <h3 className={`text-lg font-bold tracking-tight transition-all duration-300 ${hasUploaded ? darkMode ? 'text-[#f0e9dd]' : 'text-ink' : darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`} style={{ fontFamily: 'var(--font-display)' }}>
@@ -1287,8 +1474,9 @@ export default function App() {
 
               <div className="space-y-1.5">
                 <div>
-                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pattern</label>
+                  <label htmlFor="pattern" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Pattern</label>
                   <select
+                    id="pattern"
                     className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                     value={style}
                     onChange={(e) => setStyle(e.target.value as any)}
@@ -1308,10 +1496,11 @@ export default function App() {
 
                 {style === 'upscale' && (
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
+                    <label htmlFor="colorMode" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
                       Color Mode
                     </label>
                     <select
+                      id="colorMode"
                       className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
                       value={colorMode}
                       onChange={(e) => setColorMode(e.target.value as 'color' | 'mono')}
@@ -1325,8 +1514,9 @@ export default function App() {
                 {hasUploaded && <StyleTipBox />}
 
                 <div>
-                  <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Dot Size (mm)</label>
+                  <label htmlFor="dotSize" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Dot Size (mm)</label>
                   <input
+                    id="dotSize"
                     type="number"
                     min="2" max="50"
                     className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
@@ -1337,9 +1527,10 @@ export default function App() {
 
                 {style !== 'dither' && style !== 'cmyk' && style !== 'upscale' && (
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Angle</label>
+                    <label htmlFor="gridAngle" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Angle</label>
                     <div className="flex items-center gap-1.5">
                       <input
+                        id="gridAngle"
                         type="range"
                         min="0" max="90"
                         className="flex-1 h-1.5 rounded-full bg-line appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-sm"
@@ -1356,6 +1547,7 @@ export default function App() {
                     <div className="relative">
                       <input
                         type="color"
+                        aria-label="Ink color"
                         className="h-7 w-9 cursor-pointer border-0 p-0 rounded-md appearance-none"
                         value={dotColor}
                         onChange={(e) => setDotColor(e.target.value)}
@@ -1371,7 +1563,7 @@ export default function App() {
         </div>
 
         {/* Preview Panel */}
-        <div className="flex-1 min-h-0 animate-slide-up stagger-5 pb-28 xl:pb-0 xl:sticky xl:top-3 xl:h-[calc(100vh-6.5rem)]">
+        <div className="flex-1 min-h-0 animate-slide-up stagger-5 pb-28 xl:pb-0 xl:sticky xl:top-3 xl:h-[calc(100vh-6.5rem)] max-xl:order-2">
             <div className={`${darkMode ? 'bg-[#211c17]' : 'bg-sheet'} border border-line rounded-2xl shadow-sheet p-3 h-full flex flex-col relative`}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -1417,6 +1609,7 @@ export default function App() {
                     <button
                       onClick={() => {
                         setImage(null);
+                        setImageCredit(null);
                         setZoom(1);
                         setPan({ x: 0, y: 0 });
                       }}
@@ -1456,7 +1649,7 @@ export default function App() {
 
               <div
                 ref={previewContainerRef}
-                className={`flex-1 rounded-xl border flex items-center justify-center p-2 overflow-hidden min-h-[300px] ${image ? 'cursor-grab active:cursor-grabbing' : ''} ${darkMode ? 'border-[#3a332b] bg-[#191512]' : 'border-line bg-paper'}`}
+                className={`relative flex-1 rounded-xl border flex items-center justify-center p-2 overflow-hidden min-h-[62vh] xl:min-h-[300px] ${image ? 'cursor-grab active:cursor-grabbing' : ''} ${darkMode ? 'border-[#3a332b] bg-[#191512]' : 'border-line bg-paper'}`}
                 onMouseDown={handlePanStart}
                 onMouseMove={handlePanMove}
                 onMouseUp={handlePanEnd}
@@ -1516,12 +1709,12 @@ export default function App() {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        loadSampleImage();
+                        setGalleryOpen(true);
                       }}
                       className="mb-6 flex items-center gap-2 bg-sheet hover:bg-white text-ink font-semibold text-sm px-4 py-2 rounded-full border border-line shadow-sheet hover:shadow-lift hover:-translate-y-0.5 transition-all"
                     >
                       <FileImage className="w-4 h-4 text-accent" />
-                      <span>No photo handy? Try ours</span>
+                      <span>Try it out</span>
                     </button>
                   </div>
                 ) : (
@@ -1537,6 +1730,11 @@ export default function App() {
                       className="block"
                     />
                   </div>
+                )}
+                {image && imageCredit && (
+                  <p className={`pointer-events-none absolute bottom-1.5 left-3 right-3 truncate text-center font-mono text-[11px] ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
+                    {imageCredit}
+                  </p>
                 )}
               </div>
             </div>
@@ -1585,6 +1783,21 @@ export default function App() {
                   <span className={`text-xs font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Skip blank pages (saves paper)</span>
                 </label>
 
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={includeInstructions}
+                      onChange={(e) => setIncludeInstructions(e.target.checked)}
+                    />
+                    <div className={`w-4 h-4 rounded border border-line-strong bg-white peer-checked:bg-sky peer-checked:border-sky transition-colors flex items-center justify-center`}>
+                      {includeInstructions && <span className="text-white text-[10px] font-bold">✓</span>}
+                    </div>
+                  </div>
+                  <span className={`text-xs font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Instructions page in the PDF</span>
+                </label>
+
                 {skipBlankPages && preserveAspectRatio && image && (() => {
                   const math = getLayoutMath();
                   const totalPages = pagesWide * pagesHigh;
@@ -1603,7 +1816,7 @@ export default function App() {
                 })()}
 
                 {status && (
-                  <p className={`text-xs font-semibold ${status.includes('Error') ? 'text-[#c0452f]' : 'text-moss'}`}>
+                  <p role="status" className={`text-xs font-semibold ${status.includes('Error') || status.includes('not an image') ? 'text-[#c0452f]' : 'text-moss'}`}>
                     {status}
                   </p>
                 )}
@@ -1641,6 +1854,7 @@ export default function App() {
                 onClick={() => {
                   setImage(null);
                   setHasUploaded(false);
+                  setImageCredit(null);
                   setGenerationComplete(false);
                   setZoom(1);
                   setPan({ x: 0, y: 0 });
@@ -1664,10 +1878,20 @@ export default function App() {
           {darkMode ? <Sun className="w-5 h-5 text-accent" /> : <Moon className="w-5 h-5 text-ink" />}
         </button>
 
-        {/* Footer */}
-        <div className={`fixed bottom-28 right-4 text-[10px] font-mono ${darkMode ? 'text-[#666]' : 'text-[#1a1a1a]/50'}`}>
-          v0.7.0
-        </div>
+        <GalleryModal
+          open={galleryOpen}
+          darkMode={darkMode}
+          items={galleryItems}
+          loadingSlug={loadingGallerySlug}
+          onClose={() => setGalleryOpen(false)}
+          onSelect={loadGalleryImage}
+        />
+
+        <StatsModal
+          open={statsOpen}
+          darkMode={darkMode}
+          onClose={() => setStatsOpen(false)}
+        />
       </div>
     </div>
   );

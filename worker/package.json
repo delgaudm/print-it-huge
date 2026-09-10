@@ -1,0 +1,19 @@
+{
+  "name": "print-it-huge-stats",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init:local": "wrangler d1 execute print-it-huge-stats --local --file=schema.sql",
+    "db:init:remote": "wrangler d1 execute print-it-huge-stats --remote --file=schema.sql"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260828.1",
+    "typescript": "~5.8.2",
+    "wrangler": "^4.0.0"
+  }
+}

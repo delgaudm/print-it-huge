@@ -1,0 +1,19 @@
+name = "print-it-huge-stats"
+main = "src/index.ts"
+compatibility_date = "2025-08-01"
+
+# One-time setup (see README.md):
+#   npx wrangler d1 create print-it-huge-stats
+#   ...then paste the returned database_id below and run:
+#   npm run db:init:remote
+
+[[d1_databases]]
+binding = "DB"
+database_name = "print-it-huge-stats"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+# Comma-separated origins allowed to POST events and read stats.
+# Adjust to wherever the site is hosted (GitHub Pages project site → the
+# github.io origin; add preview/localhost origins as needed).
+[vars]
+ALLOWED_ORIGINS = "http://localhost:5173,http://127.0.0.1:5173"

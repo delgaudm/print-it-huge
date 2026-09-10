@@ -59,10 +59,48 @@ npm run lint     # Type-check the project
 - jsPDF
 - lucide-react
 
+## Working From Two Machines
+
+GitHub is the meeting point between computers. The rule of thumb: **pull before you start, push before you stop.**
+
+```bash
+git switch main       # work happens on main
+git pull              # bring down anything made on the other machine
+
+# ...do your work, test with npm run dev...
+
+git add -A            # stage every change
+git commit -m "What you changed"
+git push              # send it to GitHub so the other machine can see it
+```
+
+Never end a session with uncommitted work — even a rough `git commit -m "WIP"` is better than leaving changes stranded on one machine, and messy commits can be cleaned up later. If both machines ever get out of sync or a pull reports conflicts, stop and ask for help rather than force-pushing.
+
 ## Privacy
 
 Print It Huge processes images with browser APIs and generates the PDF locally. Your photo is not sent to a server by this app.
 
+The optional usage scoreboard counts a few anonymous totals (posters generated, pages printed, wall area). It uses no cookies, no identifiers, and never stores IPs, user agents, or image data — only integer counters, so there is nothing personal to consent to. Tracking is entirely disabled unless `VITE_STATS_URL` is set at build time. See [`worker/README.md`](worker/README.md) for how the counter works and how to deploy it.
+
+## Stats Worker (optional)
+
+`worker/` contains a tiny Cloudflare Worker + D1 database (free tier, ~100 lines, no dependencies) that receives the anonymous counters and serves the public "Shop stats" scoreboard. To enable it:
+
+```bash
+cd worker
+npm install
+npx wrangler login
+npx wrangler d1 create print-it-huge-stats   # paste the database_id into worker/wrangler.toml
+npm run db:init:remote
+npm run deploy                               # prints the workers.dev URL
+```
+
+Then build the site with `VITE_STATS_URL=<that url>`. For local development, `cd worker && npm run dev` and the checked-out `.env.development` already points the site at `http://localhost:8787`.
+
 ## License
 
-MIT
+Copyright © 2026 Mike DelGaudio
+
+Print It Huge is licensed under the [GNU Affero General Public License v3.0 or later](https://www.gnu.org/licenses/agpl-3.0.txt).
+
+You are free to use, study, modify, and redistribute this project under the terms of that license. If you offer a modified version as a network service, you must make its source code available under the same license.
