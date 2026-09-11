@@ -35,3 +35,6 @@ gui-test-screenshots/
 
 # AI tool local state
 .zcode/
+
+# Local Netlify folder
+.netlify

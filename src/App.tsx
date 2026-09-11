@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { jsPDF } from 'jspdf';
+import type { jsPDF } from 'jspdf';
 import { FileImage, Download, Sun, Moon, ZoomIn, ZoomOut, RotateCcw, Target, BarChart3 } from 'lucide-react';
 import { StyleTipBox, Stamp, PrivacyTapeBadge, GalleryModal, StatsModal } from './components';
 import { GalleryItem, fetchGalleryItems, galleryImageUrl } from './lib/gallery';
@@ -22,10 +22,43 @@ function convertToGrayscale(imageData: ImageData): ImageData {
 }
 
 // Rendering cost grows with the page grid, so dimensions are clamped in JS
-// (the HTML min/max attributes alone do not stop typed input)
-const MAX_PAGES_PER_SIDE = 100;
+// (the HTML min/max attributes alone do not stop typed input). The 20/400
+// caps keep the preview and PDF renderers from hanging the tab.
+const MAX_PAGES_PER_SIDE = 20;
+const MAX_TOTAL_PAGES = 400;
+const MAX_IMAGE_FILE_SIZE = 25 * 1024 * 1024;
+const MAX_IMAGE_PIXELS = 40_000_000;
 
 const clampPages = (value: string) => Math.min(MAX_PAGES_PER_SIDE, Math.max(1, parseInt(value) || 1));
+
+const clampPageCount = (value: number) => Math.min(MAX_PAGES_PER_SIDE, Math.max(1, value));
+
+type ImageFit = 'contain' | 'cover';
+
+// Scale the image to fit entirely inside the grid (contain: centered with
+// blank margins) or to cover it completely (cover: centered, edges cropped).
+function getFittedRect(sourceWidth: number, sourceHeight: number, targetWidth: number, targetHeight: number, fit: ImageFit) {
+  const scale = fit === 'contain'
+    ? Math.min(targetWidth / sourceWidth, targetHeight / sourceHeight)
+    : Math.max(targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const width = sourceWidth * scale;
+  const height = sourceHeight * scale;
+  return { x: (targetWidth - width) / 2, y: (targetHeight - height) / 2, width, height };
+}
+
+function drawImageFitted(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  targetWidth: number,
+  targetHeight: number,
+  fit: ImageFit,
+) {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  const rect = getFittedRect(image.width, image.height, targetWidth, targetHeight, fit);
+  ctx.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+  return rect;
+}
 
 const clampDotSize = (value: string) => Math.min(50, Math.max(2, parseFloat(value) || 2));
 
@@ -69,23 +102,43 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const loadImageFile = (file: File, source: 'upload' | 'drop') => {
+    setStatus('');
+    setGenerationComplete(false);
+    if (!file.type.startsWith('image/')) {
+      setStatus('That file is not an image — drop a JPG, PNG, or WebP.');
+      return;
+    }
+    if (file.size > MAX_IMAGE_FILE_SIZE) {
+      setStatus('Error: Image must be 25 MB or smaller.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
+        if (img.width * img.height > MAX_IMAGE_PIXELS) {
+          setStatus('Error: Image is too large. Please use an image under 40 megapixels.');
+          return;
+        }
         setImage(img);
         setHasUploaded(true);
         setZoom(1);
         setPan({ x: 0, y: 0 });
-        trackEvent({ name: 'image_loaded', source: 'upload' });
+        trackEvent({ name: 'image_loaded', source });
       };
+      img.onerror = () => setStatus('Error: That image could not be decoded. Try a PNG, JPEG, or WebP file.');
       img.src = event.target?.result as string;
     };
+    reader.onerror = () => setStatus('Error: That image could not be read. Please try another file.');
     reader.readAsDataURL(file);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) loadImageFile(file, 'upload');
+    // Reset so picking the same file again still fires a change event
+    e.target.value = '';
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -94,24 +147,7 @@ export default function App() {
     setIsDragging(false);
 
     const file = e.dataTransfer.files?.[0];
-    if (!file || !file.type.startsWith('image/')) {
-      setStatus('That file is not an image — drop a JPG, PNG, or WebP.');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        setImage(img);
-        setHasUploaded(true);
-        setZoom(1);
-        setPan({ x: 0, y: 0 });
-        trackEvent({ name: 'image_loaded', source: 'drop' });
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+    if (file) loadImageFile(file, 'drop');
   };
 
   // The gallery manifest lives in /public; fetch it once per session.
@@ -248,8 +284,8 @@ export default function App() {
       if (newPagesWide < 1) newPagesWide = 1;
     }
 
-    setPagesWide(newPagesWide);
-    setPagesHigh(newPagesHigh);
+    setPagesWide(clampPageCount(newPagesWide));
+    setPagesHigh(clampPageCount(newPagesHigh));
   };
 
   // Calculate wall dimensions from pages grid
@@ -306,8 +342,8 @@ export default function App() {
     const calculatedPagesHigh = Math.floor(wallHeightMm / pHeight);
 
     return {
-      pagesWide: Math.min(100, Math.max(1, calculatedPagesWide)),
-      pagesHigh: Math.min(100, Math.max(1, calculatedPagesHigh))
+      pagesWide: Math.min(MAX_PAGES_PER_SIDE, Math.max(1, calculatedPagesWide)),
+      pagesHigh: Math.min(MAX_PAGES_PER_SIDE, Math.max(1, calculatedPagesHigh))
     };
   };
 
@@ -322,25 +358,16 @@ export default function App() {
     const totalWidthMm = pWidth * pagesWide;
     const totalHeightMm = pHeight * pagesHigh;
 
-    let cols = Math.floor(totalWidthMm / dotSize);
-    let rows = Math.floor(totalHeightMm / dotSize);
-    let offsetX = 0;
-    let offsetY = 0;
-
-    if (preserveAspectRatio && image) {
-      const imageAspect = image.width / image.height;
-      const totalAspect = cols / rows;
-
-      if (imageAspect > totalAspect) {
-        // Image is wider - fit to width, add padding on top/bottom
-        rows = Math.floor(cols / imageAspect);
-        offsetY = Math.floor((totalHeightMm / dotSize - rows) / 2);
-      } else {
-        // Image is taller - fit to height, add padding on sides
-        cols = Math.floor(rows * imageAspect);
-        offsetX = Math.floor((totalWidthMm / dotSize - cols) / 2);
-      }
-    }
+    const cols = Math.max(1, Math.floor(totalWidthMm / dotSize));
+    const rows = Math.max(1, Math.floor(totalHeightMm / dotSize));
+    const fit: ImageFit = preserveAspectRatio ? 'contain' : 'cover';
+    const imageRect = image
+      ? getFittedRect(image.width, image.height, cols, rows, fit)
+      : { x: 0, y: 0, width: cols, height: rows };
+    // The image is already centered inside the grid by getFittedRect, so the
+    // grid needs no extra offset.
+    const offsetX = 0;
+    const offsetY = 0;
 
     // Calculate which pages contain content
     const colsPerPage = Math.floor(pWidth / dotSize);
@@ -355,10 +382,10 @@ export default function App() {
         const pageGridYEnd = (pageY + 1) * rowsPerPage;
 
         // Check if this page intersects with the image area
-        const imageGridX = offsetX;
-        const imageGridY = offsetY;
-        const imageGridXEnd = offsetX + cols;
-        const imageGridYEnd = offsetY + rows;
+        const imageGridX = Math.max(0, imageRect.x);
+        const imageGridY = Math.max(0, imageRect.y);
+        const imageGridXEnd = Math.min(cols, imageRect.x + imageRect.width);
+        const imageGridYEnd = Math.min(rows, imageRect.y + imageRect.height);
 
         const hasContent = !(
           pageGridXEnd <= imageGridX ||
@@ -397,17 +424,14 @@ export default function App() {
     canvas.style.height = `${cssHeight}px`;
     ctx.scale(dpr, dpr);
 
-    // Draw image with padding if preserving aspect ratio
-    const imgCanvas = document.createElement('canvas');
-    const imgCols = preserveAspectRatio ? math.cols : Math.floor(math.totalWidthMm / math.dotSize);
-    const imgRows = preserveAspectRatio ? math.rows : Math.floor(math.totalHeightMm / math.dotSize);
-    imgCanvas.width = imgCols;
-    imgCanvas.height = imgRows;
-    const imgCtx = imgCanvas.getContext('2d', { willReadFrequently: true });
-    if (!imgCtx) return;
+    const offscreen = document.createElement('canvas');
+    offscreen.width = math.cols;
+    offscreen.height = math.rows;
+    const oCtx = offscreen.getContext('2d', { willReadFrequently: true });
+    if (!oCtx) return;
 
-    imgCtx.drawImage(image, 0, 0, imgCols, imgRows);
-    const imgData = imgCtx.getImageData(0, 0, imgCols, imgRows).data;
+    drawImageFitted(oCtx, image, math.cols, math.rows, preserveAspectRatio ? 'contain' : 'cover');
+    const imgData = oCtx.getImageData(0, 0, math.cols, math.rows).data;
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, cssWidth, cssHeight);
@@ -497,7 +521,7 @@ export default function App() {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, cssWidth, cssHeight);
 
-      ctx.drawImage(image, 0, 0, cssWidth, cssHeight);
+      drawImageFitted(ctx, image, cssWidth, cssHeight, preserveAspectRatio ? 'contain' : 'cover');
 
       if (colorMode === 'mono') {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -772,13 +796,21 @@ export default function App() {
   const generatePDF = () => {
     if (!image) return;
 
+    if (pagesWide > MAX_PAGES_PER_SIDE || pagesHigh > MAX_PAGES_PER_SIDE || pagesWide * pagesHigh > MAX_TOTAL_PAGES) {
+      setStatus(`Error: Posters are limited to ${MAX_PAGES_PER_SIDE} × ${MAX_PAGES_PER_SIDE} pages (${MAX_TOTAL_PAGES} total).`);
+      return;
+    }
+
     setIsGenerating(true);
     setStatus('Ruling up pages...');
     const statusTimer1 = setTimeout(() => setStatus('Laying out the dots...'), 1000);
     const statusTimer2 = setTimeout(() => setStatus('Lining up the tiles...'), 2000);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
+        // Loaded on demand: jsPDF is large and only needed once the user
+        // actually generates a poster.
+        const { jsPDF } = await import('jspdf');
         const math = getLayoutMath();
         const hexColor = dotColor.replace('#', '');
 
@@ -793,11 +825,8 @@ export default function App() {
         const oCtx = offscreen.getContext('2d', { willReadFrequently: true });
         if (!oCtx) throw new Error("Could not get canvas context");
 
-        // Draw image with padding if preserving aspect ratio
-        const imgCols = preserveAspectRatio ? math.cols : Math.floor(math.totalWidthMm / math.dotSize);
-        const imgRows = preserveAspectRatio ? math.rows : Math.floor(math.totalHeightMm / math.dotSize);
-        oCtx.drawImage(image, 0, 0, imgCols, imgRows);
-        const imgData = oCtx.getImageData(0, 0, imgCols, imgRows).data;
+        drawImageFitted(oCtx, image, math.cols, math.rows, preserveAspectRatio ? 'contain' : 'cover');
+        const imgData = oCtx.getImageData(0, 0, math.cols, math.rows).data;
 
         const maxRadius = math.dotSize / 2;
         let isFirstPage = true;
@@ -918,17 +947,39 @@ export default function App() {
 
               pageCanvas.width = pageWidthPx;
               pageCanvas.height = pageHeightPx;
+              pageCtx.fillStyle = '#ffffff';
+              pageCtx.fillRect(0, 0, pageWidthPx, pageHeightPx);
 
-              const sourceX = (pageX * math.pWidth / math.totalWidthMm) * image.width;
-              const sourceY = (pageY * math.pHeight / math.totalHeightMm) * image.height;
-              const sourceWidth = (math.pWidth / math.totalWidthMm) * image.width;
-              const sourceHeight = (math.pHeight / math.totalHeightMm) * image.height;
-
-              pageCtx.drawImage(
-                image,
-                sourceX, sourceY, sourceWidth, sourceHeight,
-                0, 0, pageWidthPx, pageHeightPx
+              const posterImageRect = getFittedRect(
+                image.width,
+                image.height,
+                math.totalWidthMm,
+                math.totalHeightMm,
+                preserveAspectRatio ? 'contain' : 'cover',
               );
+              const intersectionX = Math.max(pageStartX_mm, posterImageRect.x);
+              const intersectionY = Math.max(pageStartY_mm, posterImageRect.y);
+              const intersectionEndX = Math.min(pageEndX_mm, posterImageRect.x + posterImageRect.width);
+              const intersectionEndY = Math.min(pageEndY_mm, posterImageRect.y + posterImageRect.height);
+
+              if (intersectionEndX > intersectionX && intersectionEndY > intersectionY) {
+                const intersectionWidth = intersectionEndX - intersectionX;
+                const intersectionHeight = intersectionEndY - intersectionY;
+                const sourceX = ((intersectionX - posterImageRect.x) / posterImageRect.width) * image.width;
+                const sourceY = ((intersectionY - posterImageRect.y) / posterImageRect.height) * image.height;
+                const sourceWidth = (intersectionWidth / posterImageRect.width) * image.width;
+                const sourceHeight = (intersectionHeight / posterImageRect.height) * image.height;
+                const destinationX = ((intersectionX - pageStartX_mm) / math.pWidth) * pageWidthPx;
+                const destinationY = ((intersectionY - pageStartY_mm) / math.pHeight) * pageHeightPx;
+                const destinationWidth = (intersectionWidth / math.pWidth) * pageWidthPx;
+                const destinationHeight = (intersectionHeight / math.pHeight) * pageHeightPx;
+
+                pageCtx.drawImage(
+                  image,
+                  sourceX, sourceY, sourceWidth, sourceHeight,
+                  destinationX, destinationY, destinationWidth, destinationHeight,
+                );
+              }
 
               if (colorMode === 'mono') {
                 const imageData = pageCtx.getImageData(0, 0, pageWidthPx, pageHeightPx);
@@ -1377,14 +1428,14 @@ export default function App() {
                     } else {
                       totalPages = pagesWide * pagesHigh;
                     }
-                    const isTooMany = totalPages > 1000;
+                    const isTooMany = totalPages > MAX_TOTAL_PAGES;
 
                     return (
                       <>
                         {/* Warning for large page counts */}
                         {isTooMany && (
                           <p className="text-xs font-semibold mb-1 text-[#c0452f]">
-                            Heads up: this will create 1000+ pages
+                            Heads up: posters are capped at {MAX_PAGES_PER_SIDE} × {MAX_PAGES_PER_SIDE} pages ({MAX_TOTAL_PAGES} total)
                           </p>
                         )}
 
@@ -1435,26 +1486,27 @@ export default function App() {
                   })()}
                 </div>
 
-                {/* Preserve aspect ratio */}
+                {/* Image fit */}
                 <div className={`rounded-xl border p-3 ${darkMode ? 'border-[#3a332b] bg-white/5' : 'border-line bg-paper/70'}`}>
-                  <label className="flex items-center gap-2 cursor-pointer mb-1">
-                    <div className="relative">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={preserveAspectRatio}
-                        onChange={(e) => setPreserveAspectRatio(e.target.checked)}
-                      />
-                      <div className={`w-4 h-4 rounded border border-line-strong bg-white peer-checked:bg-sky peer-checked:border-sky transition-colors flex items-center justify-center`}>
-                        {preserveAspectRatio && <span className="text-white text-[10px] font-bold">✓</span>}
-                      </div>
-                    </div>
-                    <span className={`text-xs font-medium ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Preserve aspect ratio</span>
-                  </label>
+                  <label htmlFor="imageFit" className={`block text-xs font-semibold mb-1 ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>Image fit</label>
+                  <select
+                    id="imageFit"
+                    className={`w-full rounded-lg border p-2 text-sm font-medium outline-none transition-all focus:ring-2 focus:ring-accent/25 focus:border-accent ${darkMode ? 'bg-[#2a241e] border-[#3a332b] text-[#f0e9dd]' : 'bg-white border-line text-ink'}`}
+                    value={preserveAspectRatio ? 'contain' : 'cover'}
+                    onChange={(e) => setPreserveAspectRatio(e.target.value === 'contain')}
+                  >
+                    <option value="contain">Fit with white border</option>
+                    <option value="cover">Crop to fill</option>
+                  </select>
+                  <p className={`mt-1.5 text-[11px] leading-snug ${darkMode ? 'text-[#a1988c]' : 'text-ink-soft'}`}>
+                    {preserveAspectRatio
+                      ? 'Shows the whole image without stretching.'
+                      : 'Fills the poster without stretching; edges may be cropped.'}
+                  </p>
                   {image && preserveAspectRatio && (
                     <button
                       onClick={fitToAspectRatio}
-                      className="w-full py-1.5 px-2 text-xs font-semibold bg-sky hover:bg-sky/90 text-white rounded-lg shadow-sm hover:shadow transition-all"
+                      className="mt-1.5 w-full py-1.5 px-2 text-xs font-semibold bg-sky hover:bg-sky/90 text-white rounded-lg shadow-sm hover:shadow transition-all"
                     >
                       Fit to image
                     </button>
